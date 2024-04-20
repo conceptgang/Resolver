@@ -33,6 +33,7 @@ import SwiftUI
 #else
 import Foundation
 #endif
+import XCTestDynamicOverlay
 
 // swiftlint:disable file_length
 
@@ -57,10 +58,22 @@ public final class Resolver {
 
     // MARK: - Defaults
 
-    /// Default registry used by the static Registration functions.
+    /// Default registry used by the static Registration functions in live app.
     public static var main: Resolver = Resolver()
-    /// Default registry used by the static Resolution functions and by the Resolving protocol.
-    public static var root: Resolver = main
+    /// Default registry used by the static Registration functions in test suite.
+    public static var test: Resolver = Resolver()
+    /// Default registry used by the static Registration functions in preview.
+    public static var preview: Resolver = Resolver()
+    
+    public static var context: ResolverContext = ResolverContext.current
+    /// Current registry used by the static Resolution functions based on the context
+    public static var root: Resolver {
+        switch context {
+        case .main: main
+        case .test: test
+        case .preview: preview
+        }
+    }
     /// Default scope applied when registering new objects.
     public static var defaultScope: ResolverScope = .graph
     /// Internal scope cache used for .scope(.container)
@@ -114,14 +127,15 @@ public final class Resolver {
         lock.lock()
         defer { lock.unlock() }
         main = Resolver()
-        root = main
+        test = Resolver()
+        preview = Resolver()
         ResolverScope.application.reset()
         ResolverScope.cached.reset()
         ResolverScope.shared.reset()
         registrationNeeded = true
     }
 
-    // MARK: - Service Registration
+    // MARK: - Main Service Registration
 
     /// Static shortcut function used to register a specifc Service type and its instantiating factory method.
     ///
@@ -164,7 +178,97 @@ public final class Resolver {
                                          factory: @escaping ResolverFactoryArgumentsN<Service>) -> ResolverOptions<Service> {
         return main.register(type, name: name, factory: factory)
     }
+    
+    // MARK: - Test Service Registration
 
+    /// Static shortcut function used to register a specifc Service type and its instantiating factory method.
+    ///
+    /// - parameter type: Type of Service being registered. Optional, may be inferred by factory result type.
+    /// - parameter name: Named variant of Service being registered.
+    /// - parameter factory: Closure that constructs and returns instances of the Service.
+    ///
+    /// - returns: ResolverOptions instance that allows further customization of registered Service.
+    ///
+    @discardableResult
+    public static func registerTest<Service>(_ type: Service.Type = Service.self, name: Resolver.Name? = nil,
+                                         factory: @escaping ResolverFactory<Service>) -> ResolverOptions<Service> {
+        return test.register(type, name: name, factory: factory)
+    }
+    
+    /// Static shortcut function used to register a specifc Service type and its instantiating factory method.
+    ///
+    /// - parameter type: Type of Service being registered. Optional, may be inferred by factory result type.
+    /// - parameter name: Named variant of Service being registered.
+    /// - parameter factory: Closure that constructs and returns instances of the Service.
+    ///
+    /// - returns: ResolverOptions instance that allows further customization of registered Service.
+    ///
+    @discardableResult
+    public static func registerTest<Service>(_ type: Service.Type = Service.self, name: Resolver.Name? = nil,
+                                         factory: @escaping ResolverFactoryResolver<Service>) -> ResolverOptions<Service> {
+        return test.register(type, name: name, factory: factory)
+    }
+    
+    /// Static shortcut function used to register a specifc Service type and its instantiating factory method.
+    ///
+    /// - parameter type: Type of Service being registered. Optional, may be inferred by factory result type.
+    /// - parameter name: Named variant of Service being registered.
+    /// - parameter factory: Closure that constructs and returns instances of the Service.
+    ///
+    /// - returns: ResolverOptions instance that allows further customization of registered Service.
+    ///
+    @discardableResult
+    public static func registerTest<Service>(_ type: Service.Type = Service.self, name: Resolver.Name? = nil,
+                                         factory: @escaping ResolverFactoryArgumentsN<Service>) -> ResolverOptions<Service> {
+        return test.register(type, name: name, factory: factory)
+    }
+    
+    // MARK: - Preview Service Registration
+
+    /// Static shortcut function used to register a specifc Service type and its instantiating factory method.
+    ///
+    /// - parameter type: Type of Service being registered. Optional, may be inferred by factory result type.
+    /// - parameter name: Named variant of Service being registered.
+    /// - parameter factory: Closure that constructs and returns instances of the Service.
+    ///
+    /// - returns: ResolverOptions instance that allows further customization of registered Service.
+    ///
+    @discardableResult
+    public static func registerPreview<Service>(_ type: Service.Type = Service.self, name: Resolver.Name? = nil,
+                                         factory: @escaping ResolverFactory<Service>) -> ResolverOptions<Service> {
+        return preview.register(type, name: name, factory: factory)
+    }
+    
+    /// Static shortcut function used to register a specifc Service type and its instantiating factory method.
+    ///
+    /// - parameter type: Type of Service being registered. Optional, may be inferred by factory result type.
+    /// - parameter name: Named variant of Service being registered.
+    /// - parameter factory: Closure that constructs and returns instances of the Service.
+    ///
+    /// - returns: ResolverOptions instance that allows further customization of registered Service.
+    ///
+    @discardableResult
+    public static func registerPreview<Service>(_ type: Service.Type = Service.self, name: Resolver.Name? = nil,
+                                         factory: @escaping ResolverFactoryResolver<Service>) -> ResolverOptions<Service> {
+        return preview.register(type, name: name, factory: factory)
+    }
+    
+    /// Static shortcut function used to register a specifc Service type and its instantiating factory method.
+    ///
+    /// - parameter type: Type of Service being registered. Optional, may be inferred by factory result type.
+    /// - parameter name: Named variant of Service being registered.
+    /// - parameter factory: Closure that constructs and returns instances of the Service.
+    ///
+    /// - returns: ResolverOptions instance that allows further customization of registered Service.
+    ///
+    @discardableResult
+    public static func registerPreview<Service>(_ type: Service.Type = Service.self, name: Resolver.Name? = nil,
+                                         factory: @escaping ResolverFactoryArgumentsN<Service>) -> ResolverOptions<Service> {
+        return preview.register(type, name: name, factory: factory)
+    }
+
+    // MARK: - Service Registration
+    
     /// Registers a specific Service type and its instantiating factory method.
     ///
     /// - parameter type: Type of Service being registered. Optional, may be inferred by factory result type.
@@ -238,11 +342,33 @@ public final class Resolver {
         lock.lock()
         defer { lock.unlock() }
         registrationCheck()
-        if let registration = root.lookup(type, name: name), let service = registration.resolve(resolver: root, args: args) {
-#if DEBUG
-            Resolver.decorate?(service)
-#endif
-            return service
+        
+        switch context {
+        case .preview:
+            if let registration = preview.lookup(type, name: name), let service = registration.resolve(resolver: preview, args: args) {
+                #if DEBUG
+                Resolver.decorate?(service)
+                #endif
+                return service
+            } else {
+                fallthrough
+            }
+        case .test:
+            if let registration = test.lookup(type, name: name), let service = registration.resolve(resolver: test, args: args) {
+                #if DEBUG
+                Resolver.decorate?(service)
+                #endif
+                return service
+            } else {
+                fallthrough
+            }
+        case .main:
+            if let registration = main.lookup(type, name: name), let service = registration.resolve(resolver: main, args: args) {
+                #if DEBUG
+                Resolver.decorate?(service)
+                #endif
+                return service
+            }
         }
         fatalError("RESOLVER: '\(Service.self):\(name?.rawValue ?? "NONAME")' not resolved. To disambiguate optionals use resolver.optional().")
     }
@@ -281,11 +407,32 @@ public final class Resolver {
         lock.lock()
         defer { lock.unlock() }
         registrationCheck()
-        if let registration = root.lookup(type, name: name), let service = registration.resolve(resolver: root, args: args) {
-#if DEBUG
-            Resolver.decorate?(service)
-#endif
-            return service
+        switch context {
+        case .preview:
+            if let registration = preview.lookup(type, name: name), let service = registration.resolve(resolver: preview, args: args) {
+                #if DEBUG
+                Resolver.decorate?(service)
+                #endif
+                return service
+            } else {
+                fallthrough
+            }
+        case .test:
+            if let registration = test.lookup(type, name: name), let service = registration.resolve(resolver: test, args: args) {
+                #if DEBUG
+                Resolver.decorate?(service)
+                #endif
+                return service
+            } else {
+                fallthrough
+            }
+        case .main:
+            if let registration = main.lookup(type, name: name), let service = registration.resolve(resolver: main, args: args) {
+                #if DEBUG
+                Resolver.decorate?(service)
+                #endif
+                return service
+            }
         }
         return nil
     }
@@ -450,7 +597,25 @@ extension Resolver {
 
 // Registration Internals
 
-private var registrationNeeded: Bool = true
+private var liveRegistrationNeeded: Bool = true
+private var testRegistrationNeeded: Bool = true
+private var previewRegistrationNeeded: Bool = true
+private var registrationNeeded: Bool {
+    get {
+        switch Resolver.context {
+        case .main: liveRegistrationNeeded
+        case .test: testRegistrationNeeded
+        case .preview: previewRegistrationNeeded
+        }
+    }
+    set {
+        switch Resolver.context {
+        case .main: liveRegistrationNeeded = newValue
+        case .test: testRegistrationNeeded = newValue
+        case .preview: previewRegistrationNeeded = newValue
+        }
+    }
+}
 
 @inline(__always)
 private func registrationCheck() {
@@ -583,6 +748,23 @@ public final class ResolverRegistration<Service> {
         self.factory = modifier(factory)
     }
 
+}
+
+// Context
+public enum ResolverContext {
+    case main
+    case test
+    case preview
+    
+    static var current: ResolverContext {
+        if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
+          return .preview
+        } else if _XCTIsTesting {
+          return .test
+        } else {
+          return .main
+        }
+    }
 }
 
 // Scopes
