@@ -780,17 +780,17 @@ public class ResolverScope: ResolverScopeType {
     // Moved definitions to ResolverScope to allow for dot notation access
 
     /// All application scoped services exist for lifetime of the app. (e.g Singletons)
-    public static let application = ResolverScopeCache()
+    nonisolated(unsafe) public static let application = ResolverScopeCache()
     /// Proxy to container's scope. Cache type depends on type supplied to container (default .cache)
-    public static let container = ResolverScopeContainer()
+    nonisolated(unsafe) public static let container = ResolverScopeContainer()
     /// Cached services exist for lifetime of the app or until their cache is reset.
-    public static let cached = ResolverScopeCache()
+    nonisolated(unsafe) public static let cached = ResolverScopeCache()
     /// Graph services are initialized once and only once during a given resolution cycle. This is the default scope.
-    public static let graph = ResolverScopeGraph()
+    nonisolated(unsafe) public static let graph = ResolverScopeGraph()
     /// Shared services persist while strong references to them exist. They're then deallocated until the next resolve.
-    public static let shared = ResolverScopeShare()
+    nonisolated(unsafe) public static let shared = ResolverScopeShare()
     /// Unique services are created and initialized each and every time they're resolved.
-    public static let unique = ResolverScope()
+    nonisolated(unsafe) public static let unique = ResolverScope()
 
     public init() {}
     
